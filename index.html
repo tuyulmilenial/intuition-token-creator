@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Intuition Testnet Token Creator (Auto-Detect)</title>
+    <title>Intuition Testnet Token Creator (Tx Hash)</title>
     <!-- Memuat Tailwind CSS untuk styling modern -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -91,13 +91,18 @@
             <button id="createTokenBtn" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-4 rounded-lg transition duration-300 ease-in-out transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-opacity-75">
                 Create Mock Token
             </button>
+            
+            <!-- *** BARU: Kontainer untuk menampilkan link tx hash *** -->
+            <div id="txLinkContainer" class="hidden text-center mt-4 p-3 bg-gray-700 rounded-lg">
+                <!-- Link akan dimasukkan di sini oleh JavaScript -->
+            </div>
         </div>
     </div>
 
     <!-- Elemen untuk Notifikasi -->
     <div id="notification" class="notification"></div>
 
-    <!-- Library Ethers.js untuk interaksi dengan blockchain -->
+    <!-- Menggunakan CDN yang lebih andal untuk Ethers.js -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js"></script>
 
     <script>
@@ -109,6 +114,7 @@
         const createTokenBtn = document.getElementById('createTokenBtn');
         const notification = document.getElementById('notification');
         const connectionContainer = document.getElementById('connectionContainer');
+        const txLinkContainer = document.getElementById('txLinkContainer'); // *** BARU ***
 
         // --- Konfigurasi Jaringan Intuition Testnet ---
         const intuitionTestnet = {
@@ -121,7 +127,6 @@
         
         let provider;
         let signer;
-        // Menyimpan penyedia yang terdeteksi untuk menghindari duplikat
         const discoveredProviders = new Map();
 
         // --- Fungsi untuk Menampilkan Notifikasi ---
@@ -166,20 +171,16 @@
                 signer = provider.getSigner();
                 const address = await signer.getAddress();
                 
-                // Update UI
                 walletAddress.textContent = `${address.substring(0, 6)}...${address.substring(address.length - 4)}`;
-                connectionContainer.innerHTML = ''; // Hapus semua tombol koneksi
-                connectionContainer.appendChild(walletAddress.parentElement); // Tampilkan status yang sudah terhubung
+                connectionContainer.innerHTML = ''; 
+                connectionContainer.appendChild(walletAddress.parentElement); 
                 
                 showNotification(`Connected with ${providerDetail.info.name}!`);
-
                 await switchToIntuitionNetwork(providerDetail.provider);
-                
                 tokenForm.classList.remove('hidden');
-
             } catch (error) {
-                console.error("Could not connect to wallet:", error);
-                showNotification("Could not connect wallet.", 'error');
+                console.error("Wallet connection failed:", error);
+                showNotification(`Connection failed: ${error.message || 'User rejected request.'}`, 'error');
             }
         }
 
@@ -198,38 +199,30 @@
         // --- Mendengarkan Event EIP-6963 untuk Mendeteksi Wallet ---
         window.addEventListener('eip6963:announceProvider', (event) => {
             const providerDetail = event.detail;
-            
-            // Cek jika penyedia sudah ditemukan
             if (discoveredProviders.has(providerDetail.info.uuid)) return;
             discoveredProviders.set(providerDetail.info.uuid, providerDetail);
-
-            // Sembunyikan pesan "Detecting..." jika ini adalah wallet pertama
             if (detectionStatus.style.display !== 'none') {
                 detectionStatus.style.display = 'none';
             }
-            
             createWalletButton(providerDetail);
         });
 
-        // --- Dispatch Event untuk Meminta Penyedia Mengumumkan Diri ---
         window.dispatchEvent(new Event('eip6963:requestProvider'));
 
-        // --- Fallback jika tidak ada wallet EIP-6963 yang terdeteksi ---
         setTimeout(() => {
             if (discoveredProviders.size === 0) {
-                 // Cek untuk window.ethereum sebagai fallback
                 if (typeof window.ethereum !== 'undefined') {
                     detectionStatus.style.display = 'none';
                     const metamaskProvider = {
-                        info: { name: 'Browser Wallet', icon: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjU2IiBoZWlnaHQ9IjI1NiIgdmlld0JveD0iMCAwIDI1NiAyNTYiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHBhdGggZD0iTTIyOS41IDc1LjYgMTQ0LjIgMjguMWE4IDggMCAwIDAtMTIuNCAwbC04NS4zIDQ3LjVhOCA4IDAgMCAwLTQuMSAxMS4xbDI2LjYgNjEuMWExNiAxNiAwIDAgMCAzMC4yIDBsMjYuNi02MS4xYTggOCAwIDAgMSAxMi40IDBsMjYuNiA2MS4xYTE2IDE2IDAgMCAwIDMwLjIgMGwyNi42LTYxLjFhOCA4IDAgMCAwLTQuMS0xMS4xWiIgZmlsbD0iI2Y2ODY1YiIvPjxwYXRoIGQ9Im0xNjAuNCAxMjAuMi0yNi42IDYxLjFhMTYgMTYgMCAwIDEtMzAuMiAwbC0yNi42LTYxLjFhOCA4IDAgMCAwLTEyLjQgMGwtMjYuNiA2MS4xYTE2IDE2IDAgMCAwIDguNyAyMS44bDgwLjEgNDEuMmE4IDggMCAwIDAgNy42IDBsODAuMS00MS4yYTE2IDE2IDAgMCAwIDguNy0yMS44bC0yNi42LTYxLjFhOCA4IDAgMCAwLTEyLjQgMFoiIGZpbGw9IiNjMDc0MmIiLz48cGF0aCBkPSJtMTg3IDE4MS4zLTI2LjYtNjEuMWE4IDggMCAwIDAtMTIuNCAwbC0xMy4zIDMwLjZhMTYgMTYgMCAwIDEgMTUuMSA5LjlsMjEuOCA3LjNhOCA4IDAgMCAxIDUuNCAxMy4zWiIgZmlsbD0iI2UyNzYyYiIvPjxwYXRoIGQ9Im02OC44IDE4MS4zIDI2LjgtNjEuMWE4IDggMCAwIDEgMTIuNCAwbDEzLjMgMzAuNmExNiAxNiAwIDAgMC0xNS4xIDkuOWwtMjEuOCA3LjNhOCA4IDAgMCAwLTUuNCAxMy4zWiIgZmlsbD0iI2UyNzYyYiIvPjxwYXRoIGQ9Im0xNTUgMTQxLjIgMTMuMy0zMC42YTggOCAwIDAgMC0xMi40IDBsLTEzLjMgMzAuNmExNiAxNiAwIDAgMCAwIDIwLjJsMTMuMyAzMC42YTggOCAwIDAgMCAxMi40IDBaIiBmaWxsPSIjZTU3MzJiIi8+PHBhdGggZD0ibTEwMSAxNDEuMi0xMy4zLTMwLjZhOCA4IDAgMCAwLTEyLjQgMGwtMTMuMyAzMC42YTE2IDE2IDAgMCAwIDAgMjAuMmwxMy4zIDMwLjZhOCA4IDAgMCAwIDEyLjQgMFoiIGZpbGw9IiNlNTczMmIiLz48L3N2Zz4=' }, // Generic icon
+                        info: { name: 'Browser Wallet', icon: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjU2IiBoZWlnaHQ9IjI1NiIgdmlld0JveD0iMCAwIDI1NiAyNTYiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHBhdGggZD0iTTIyOS41IDc1LjYgMTQ0LjIgMjguMWE4IDggMCAwIDAtMTIuNCAwbC04NS4zIDQ3LjVhOCA4IDAgMCAwLTQuMSAxMS4xbDI2LjYgNjEuMWExNiAxNiAwIDAgMCAzMC4yIDBsMjYuNi06MS4xYTggOCAwIDAgMSAxMi40IDBsMjYuNiA2MS4xYTE2IDE2IDAgMCAwIDMwLjIgMGwyNi42LTYxLjFhOCA4IDAgMCAwLTQuMS0xMS4xWiIgZmlsbD0iI2Y2ODY1YiIvPjxwYXRoIGQ9Im0xNjAuNCAxMjAuMi0yNi42IDYxLjFhMTYgMTYgMCAwIDEtMzAuMiAwbC0yNi42LTYxLjFhOCA4IDAgMCAwLTEyLjQgMGwtMjYuNiA2MS4xYTE2IDE2IDAgMCAwIDguNyAyMS44bDgwLjEgNDEuMmE4IDggMCAwIDAgNy42IDBsODAuMS00MS4yYTE2IDE2IDAgMCAwIDguNy0yMS44bC0yNi42LTYxLjFhOCA4IDAgMCAwLTEyLjQgMFoiIGZpbGw9IiNjMDc0MmIiLz48cGF0aCBkPSJtMTg3IDE4MS4zLTI2LjYtNjEuMWE4IDggMCAwIDAtMTIuNCAwbC0xMy4zIDMwLjZhMTYgMTYgMCAwIDEgMTUuMSA5LjlsMjEuOCA3LjNhOCA4IDAgMCAxIDUuNCAxMy4zWiIgZmlsbD0iI2UyNzYyYiIvPjxwYXRoIGQ9Im02OC44IDE4MS4zIDI2LjgtNjEuMWE4IDggMCAwIDEgMTIuNCAwbDEzLjMgMzAuNmExNiAxNiAwIDAgMC0xNS4xIDkuOWwtMjEuOCA3LjNhOCA4IDAgMCAwLTUuNCAxMy4zWiIgZmlsbD0iI2UyNzYyYiIvPjxwYXRoIGQ9Im0xNTUgMTQxLjIgMTMuMy0zMC42YTggOCAwIDAgMC0xMi40IDBsLTEzLjMgMzAuNmExNiAxNiAwIDAgMCAwIDIwLjJsMTMuMyAzMC42YTggOCAwIDAgMCAxMi40IDBaIiBmaWxsPSIjZTU3MzJiIi8+PHBhdGggZD0ibTEwMSAxNDEuMi0xMy4zLTMwLjZhOCA4IDAgMCAwLTEyLjQgMGwtMTMuMyAzMC42YTE2IDE2IDAgMCAwIDAgMjAuMmwxMy4zIDMwLjZhOCA4IDAgMCAwIDEyLjQgMFoiIGZpbGw9IiNlNTczMmIiLz48L3N2Zz4=' },
                         provider: window.ethereum
                     };
-                    createWalletButton(metamaskProvider);
+                    createWalletButton(metaskProvider);
                 } else {
                     detectionStatus.textContent = 'No wallet detected. Please install a browser wallet.';
                 }
             }
-        }, 1000); // Tunggu 1 detik
+        }, 1000);
 
         // --- Fungsi untuk Simulasi Pembuatan Token ---
         function createToken() {
@@ -242,7 +235,25 @@
                 return;
             }
             
-            console.log("Token Data:", { name: tokenName, ticker: tokenTicker, supply: totalSupply });
+            // *** PERUBAHAN UTAMA DIMULAI DI SINI ***
+
+            // 1. Buat tx hash palsu untuk simulasi
+            const fakeTxHash = '0x' + [...Array(64)].map(() => Math.floor(Math.random() * 16).toString(16)).join('');
+
+            // 2. Buat URL lengkap ke explorer
+            const explorerUrl = `${intuitionTestnet.blockExplorerUrls[0]}tx/${fakeTxHash}`;
+
+            // 3. Tampilkan link di kontainer yang sudah kita siapkan
+            txLinkContainer.innerHTML = `
+                <p class="text-sm text-gray-300">Mock transaction sent!</p>
+                <a href="${explorerUrl}" target="_blank" rel="noopener noreferrer" class="text-cyan-400 hover:underline break-all">
+                    View on Explorer: ${fakeTxHash.substring(0, 10)}...${fakeTxHash.substring(fakeTxHash.length - 8)}
+                </a>
+            `;
+            txLinkContainer.classList.remove('hidden'); // Tampilkan kontainer
+
+            // *** PERUBAHAN SELESAI ***
+
             showNotification(`Mock token creation for "${tokenName}" was successful!`);
         }
 
