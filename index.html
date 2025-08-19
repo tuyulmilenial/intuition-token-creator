@@ -37,6 +37,21 @@
             height: 28px;
             margin-right: 12px;
         }
+        /* Style untuk loading spinner */
+        .spinner {
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #3498db;
+            border-radius: 50%;
+            width: 16px;
+            height: 16px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            margin-right: 8px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
     </style>
 </head>
 <body class="bg-gray-900 text-white flex items-center justify-center min-h-screen p-4">
@@ -88,11 +103,11 @@
             </div>
 
             <!-- Tombol Buat Token -->
-            <button id="createTokenBtn" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-4 rounded-lg transition duration-300 ease-in-out transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-opacity-75">
+            <button id="createTokenBtn" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-4 rounded-lg transition duration-300 ease-in-out transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-opacity-75 flex items-center justify-center">
                 Create Mock Token
             </button>
             
-            <!-- *** BARU: Kontainer untuk menampilkan link tx hash *** -->
+            <!-- Kontainer untuk menampilkan link tx hash -->
             <div id="txLinkContainer" class="hidden text-center mt-4 p-3 bg-gray-700 rounded-lg">
                 <!-- Link akan dimasukkan di sini oleh JavaScript -->
             </div>
@@ -114,7 +129,7 @@
         const createTokenBtn = document.getElementById('createTokenBtn');
         const notification = document.getElementById('notification');
         const connectionContainer = document.getElementById('connectionContainer');
-        const txLinkContainer = document.getElementById('txLinkContainer'); // *** BARU ***
+        const txLinkContainer = document.getElementById('txLinkContainer');
 
         // --- Konfigurasi Jaringan Intuition Testnet ---
         const intuitionTestnet = {
@@ -217,7 +232,7 @@
                         info: { name: 'Browser Wallet', icon: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjU2IiBoZWlnaHQ9IjI1NiIgdmlld0JveD0iMCAwIDI1NiAyNTYiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHBhdGggZD0iTTIyOS41IDc1LjYgMTQ0LjIgMjguMWE4IDggMCAwIDAtMTIuNCAwbC04NS4zIDQ3LjVhOCA4IDAgMCAwLTQuMSAxMS4xbDI2LjYgNjEuMWExNiAxNiAwIDAgMCAzMC4yIDBsMjYuNi06MS4xYTggOCAwIDAgMSAxMi40IDBsMjYuNiA2MS4xYTE2IDE2IDAgMCAwIDMwLjIgMGwyNi42LTYxLjFhOCA4IDAgMCAwLTQuMS0xMS4xWiIgZmlsbD0iI2Y2ODY1YiIvPjxwYXRoIGQ9Im0xNjAuNCAxMjAuMi0yNi42IDYxLjFhMTYgMTYgMCAwIDEtMzAuMiAwbC0yNi42LTYxLjFhOCA4IDAgMCAwLTEyLjQgMGwtMjYuNiA2MS4xYTE2IDE2IDAgMCAwIDguNyAyMS44bDgwLjEgNDEuMmE4IDggMCAwIDAgNy42IDBsODAuMS00MS4yYTE2IDE2IDAgMCAwIDguNy0yMS44bC0yNi42LTYxLjFhOCA4IDAgMCAwLTEyLjQgMFoiIGZpbGw9IiNjMDc0MmIiLz48cGF0aCBkPSJtMTg3IDE4MS4zLTI2LjYtNjEuMWE4IDggMCAwIDAtMTIuNCAwbC0xMy4zIDMwLjZhMTYgMTYgMCAwIDEgMTUuMSA5LjlsMjEuOCA3LjNhOCA4IDAgMCAxIDUuNCAxMy4zWiIgZmlsbD0iI2UyNzYyYiIvPjxwYXRoIGQ9Im02OC44IDE4MS4zIDI2LjgtNjEuMWE4IDggMCAwIDEgMTIuNCAwbDEzLjMgMzAuNmExNiAxNiAwIDAgMC0xNS4xIDkuOWwtMjEuOCA3LjNhOCA4IDAgMCAwLTUuNCAxMy4zWiIgZmlsbD0iI2UyNzYyYiIvPjxwYXRoIGQ9Im0xNTUgMTQxLjIgMTMuMy0zMC42YTggOCAwIDAgMC0xMi40IDBsLTEzLjMgMzAuNmExNiAxNiAwIDAgMCAwIDIwLjJsMTMuMyAzMC42YTggOCAwIDAgMCAxMi40IDBaIiBmaWxsPSIjZTU3MzJiIi8+PHBhdGggZD0ibTEwMSAxNDEuMi0xMy4zLTMwLjZhOCA4IDAgMCAwLTEyLjQgMGwtMTMuMyAzMC42YTE2IDE2IDAgMCAwIDAgMjAuMmwxMy4zIDMwLjZhOCA4IDAgMCAwIDEyLjQgMFoiIGZpbGw9IiNlNTczMmIiLz48L3N2Zz4=' },
                         provider: window.ethereum
                     };
-                    createWalletButton(metaskProvider);
+                    createWalletButton(metamaskProvider);
                 } else {
                     detectionStatus.textContent = 'No wallet detected. Please install a browser wallet.';
                 }
@@ -225,7 +240,7 @@
         }, 1000);
 
         // --- Fungsi untuk Simulasi Pembuatan Token ---
-        function createToken() {
+        async function createToken() {
             const tokenName = document.getElementById('tokenName').value;
             const tokenTicker = document.getElementById('tokenTicker').value;
             const totalSupply = document.getElementById('totalSupply').value;
@@ -235,26 +250,53 @@
                 return;
             }
             
-            // *** PERUBAHAN UTAMA DIMULAI DI SINI ***
+            // *** PERUBAHAN UTAMA: SIMULASI TRANSAKSI SUNGGUHAN ***
+            const originalButtonText = createTokenBtn.innerHTML;
+            createTokenBtn.disabled = true;
+            createTokenBtn.innerHTML = `<div class="spinner"></div> Waiting for Confirmation...`;
+            txLinkContainer.classList.add('hidden');
 
-            // 1. Buat tx hash palsu untuk simulasi
-            const fakeTxHash = '0x' + [...Array(64)].map(() => Math.floor(Math.random() * 16).toString(16)).join('');
+            try {
+                // 1. Siapkan transaksi simulasi (kirim 0 tTRUST ke alamat mati)
+                // Ini akan memicu pop-up konfirmasi di dompet pengguna
+                const tx = await signer.sendTransaction({
+                    to: "0x000000000000000000000000000000000000dEaD", // Dead address
+                    value: ethers.utils.parseEther("0") 
+                });
 
-            // 2. Buat URL lengkap ke explorer
-            const explorerUrl = `${intuitionTestnet.blockExplorerUrls[0]}tx/${fakeTxHash}`;
+                showNotification("Transaction submitted... waiting for confirmation.");
+                
+                // 2. Tunggu transaksi selesai
+                const receipt = await tx.wait();
+                const txHash = receipt.transactionHash;
 
-            // 3. Tampilkan link di kontainer yang sudah kita siapkan
-            txLinkContainer.innerHTML = `
-                <p class="text-sm text-gray-300">Mock transaction sent!</p>
-                <a href="${explorerUrl}" target="_blank" rel="noopener noreferrer" class="text-cyan-400 hover:underline break-all">
-                    View on Explorer: ${fakeTxHash.substring(0, 10)}...${fakeTxHash.substring(fakeTxHash.length - 8)}
-                </a>
-            `;
-            txLinkContainer.classList.remove('hidden'); // Tampilkan kontainer
+                // 3. Buat URL lengkap ke explorer
+                const explorerUrl = `${intuitionTestnet.blockExplorerUrls[0]}tx/${txHash}`;
 
-            // *** PERUBAHAN SELESAI ***
+                // 4. Tampilkan link di kontainer
+                txLinkContainer.innerHTML = `
+                    <p class="text-sm text-gray-300">Mock transaction confirmed!</p>
+                    <a href="${explorerUrl}" target="_blank" rel="noopener noreferrer" class="text-cyan-400 hover:underline break-all">
+                        View on Explorer: ${txHash.substring(0, 10)}...${txHash.substring(txHash.length - 8)}
+                    </a>
+                `;
+                txLinkContainer.classList.remove('hidden');
 
-            showNotification(`Mock token creation for "${tokenName}" was successful!`);
+                showNotification(`Mock token creation for "${tokenName}" was successful!`);
+
+            } catch (error) {
+                console.error("Transaction failed:", error);
+                // Cek jika pengguna menolak transaksi
+                if (error.code === 4001 || error.code === 'ACTION_REJECTED') {
+                    showNotification("Transaction rejected by user.", 'error');
+                } else {
+                    showNotification("An error occurred during transaction.", 'error');
+                }
+            } finally {
+                // Kembalikan tombol ke keadaan semula
+                createTokenBtn.disabled = false;
+                createTokenBtn.innerHTML = originalButtonText;
+            }
         }
 
         // --- Event Listeners ---
