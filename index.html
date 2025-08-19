@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Intuition Testnet Token Creator (Auto-Detect)</title>
+    <!-- Memuat Tailwind CSS untuk styling modern -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Menambahkan font Inter untuk tampilan yang lebih bersih */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Style untuk notifikasi */
+        .notification {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 12px 20px;
+            border-radius: 8px;
+            color: white;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s, visibility 0.3s;
+            z-index: 1000;
+        }
+        .notification.show {
+            opacity: 1;
+            visibility: visible;
+        }
+        .notification.success { background-color: #28a745; }
+        .notification.error { background-color: #dc3545; }
+        .wallet-btn img {
+            width: 28px;
+            height: 28px;
+            margin-right: 12px;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white flex items-center justify-center min-h-screen p-4">
+
+    <div class="w-full max-w-md mx-auto bg-gray-800 rounded-2xl shadow-lg p-8 space-y-6">
+        
+        <!-- Header -->
+        <div class="text-center">
+            <h1 class="text-3xl font-bold text-cyan-400">Intuition Token Creator</h1>
+            <p class="text-gray-400 mt-2">Create your testnet token on the Intuition network.</p>
+        </div>
+
+        <!-- Kontainer untuk Koneksi Wallet -->
+        <div id="connectionContainer">
+            <!-- Status Koneksi -->
+            <div class="bg-gray-700 p-4 rounded-lg text-center mb-4">
+                <p class="text-sm font-medium text-gray-300">Wallet Status</p>
+                <p id="walletAddress" class="text-lg font-semibold text-gray-400 truncate">Not Connected</p>
+            </div>
+            
+            <!-- Daftar Wallet yang Terdeteksi -->
+            <div id="wallet-selection" class="space-y-3">
+                <p id="detection-status" class="text-center text-gray-400">Detecting wallets...</p>
+                <!-- Tombol wallet akan dimasukkan di sini oleh JavaScript -->
+            </div>
+        </div>
+
+
+        <!-- Form Pembuatan Token (Awalnya tersembunyi) -->
+        <div id="tokenForm" class="hidden space-y-4 pt-4 border-t border-gray-700">
+            <h2 class="text-xl font-semibold text-center text-gray-200">2. Fill Token Details</h2>
+            
+            <!-- Input Nama Token -->
+            <div>
+                <label for="tokenName" class="block text-sm font-medium text-gray-300 mb-1">Token Name</label>
+                <input type="text" id="tokenName" placeholder="e.g., My Test Token" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:ring-cyan-500 focus:border-cyan-500 transition">
+            </div>
+
+            <!-- Input Ticker Token -->
+            <div>
+                <label for="tokenTicker" class="block text-sm font-medium text-gray-300 mb-1">Ticker (Symbol)</label>
+                <input type="text" id="tokenTicker" placeholder="e.g., MTT" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:ring-cyan-500 focus:border-cyan-500 transition">
+            </div>
+
+            <!-- Input Jumlah Supply -->
+            <div>
+                <label for="totalSupply" class="block text-sm font-medium text-gray-300 mb-1">Total Supply</label>
+                <input type="number" id="totalSupply" placeholder="e.g., 1000000" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:ring-cyan-500 focus:border-cyan-500 transition">
+            </div>
+
+            <!-- Tombol Buat Token -->
+            <button id="createTokenBtn" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-4 rounded-lg transition duration-300 ease-in-out transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-opacity-75">
+                Create Mock Token
+            </button>
+        </div>
+    </div>
+
+    <!-- Elemen untuk Notifikasi -->
+    <div id="notification" class="notification"></div>
+
+    <!-- Library Ethers.js untuk interaksi dengan blockchain -->
+    <script src="https://cdn.ethers.io/lib/ethers-5.7.2.umd.min.js"></script>
+
+    <script>
+        // --- Referensi Elemen DOM ---
+        const walletSelection = document.getElementById('wallet-selection');
+        const detectionStatus = document.getElementById('detection-status');
+        const walletAddress = document.getElementById('walletAddress');
+        const tokenForm = document.getElementById('tokenForm');
+        const createTokenBtn = document.getElementById('createTokenBtn');
+        const notification = document.getElementById('notification');
+        const connectionContainer = document.getElementById('connectionContainer');
+
+        // --- Konfigurasi Jaringan Intuition Testnet ---
+        const intuitionTestnet = {
+            chainId: '0x350B', // 13579 dalam format Hexadecimal
+            chainName: 'Intuition Testnet',
+            nativeCurrency: { name: 'tTRUST', symbol: 'tTRUST', decimals: 18 },
+            rpcUrls: ['https://testnet.rpc.intuition.systems/http'],
+            blockExplorerUrls: ['https://testnet.explorer.intuition.systems/'],
+        };
+        
+        let provider;
+        let signer;
+        // Menyimpan penyedia yang terdeteksi untuk menghindari duplikat
+        const discoveredProviders = new Map();
+
+        // --- Fungsi untuk Menampilkan Notifikasi ---
+        function showNotification(message, type = 'success') {
+            notification.textContent = message;
+            notification.className = `notification ${type} show`;
+            setTimeout(() => {
+                notification.classList.remove('show');
+            }, 3000);
+        }
+
+        // --- Fungsi untuk Menambah dan Beralih ke Jaringan Intuition ---
+        async function switchToIntuitionNetwork(currentProvider) {
+            try {
+                await currentProvider.request({
+                    method: 'wallet_switchEthereumChain',
+                    params: [{ chainId: intuitionTestnet.chainId }],
+                });
+                showNotification("Switched to Intuition Testnet");
+            } catch (switchError) {
+                if (switchError.code === 4902) {
+                    try {
+                        await currentProvider.request({
+                            method: 'wallet_addEthereumChain',
+                            params: [intuitionTestnet],
+                        });
+                        showNotification("Intuition network added");
+                    } catch (addError) {
+                        showNotification("Failed to add network.", 'error');
+                    }
+                } else {
+                    showNotification("Failed to switch network.", 'error');
+                }
+            }
+        }
+
+        // --- Fungsi Utama untuk Koneksi Wallet dengan Penyedia Tertentu ---
+        async function connectWallet(providerDetail) {
+            try {
+                provider = new ethers.providers.Web3Provider(providerDetail.provider);
+                await provider.send("eth_requestAccounts", []);
+                signer = provider.getSigner();
+                const address = await signer.getAddress();
+                
+                // Update UI
+                walletAddress.textContent = `${address.substring(0, 6)}...${address.substring(address.length - 4)}`;
+                connectionContainer.innerHTML = ''; // Hapus semua tombol koneksi
+                connectionContainer.appendChild(walletAddress.parentElement); // Tampilkan status yang sudah terhubung
+                
+                showNotification(`Connected with ${providerDetail.info.name}!`);
+
+                await switchToIntuitionNetwork(providerDetail.provider);
+                
+                tokenForm.classList.remove('hidden');
+
+            } catch (error) {
+                console.error("Could not connect to wallet:", error);
+                showNotification("Could not connect wallet.", 'error');
+            }
+        }
+
+        // --- Fungsi untuk Membuat Tombol Wallet ---
+        function createWalletButton(providerDetail) {
+            const button = document.createElement('button');
+            button.className = "wallet-btn w-full bg-cyan-500 hover:bg-cyan-600 text-white font-bold py-3 px-4 rounded-lg transition duration-300 ease-in-out flex items-center justify-center";
+            button.innerHTML = `
+                <img src="${providerDetail.info.icon}" alt="${providerDetail.info.name} icon">
+                Connect ${providerDetail.info.name}
+            `;
+            button.onclick = () => connectWallet(providerDetail);
+            walletSelection.appendChild(button);
+        }
+
+        // --- Mendengarkan Event EIP-6963 untuk Mendeteksi Wallet ---
+        window.addEventListener('eip6963:announceProvider', (event) => {
+            const providerDetail = event.detail;
+            
+            // Cek jika penyedia sudah ditemukan
+            if (discoveredProviders.has(providerDetail.info.uuid)) return;
+            discoveredProviders.set(providerDetail.info.uuid, providerDetail);
+
+            // Sembunyikan pesan "Detecting..." jika ini adalah wallet pertama
+            if (detectionStatus.style.display !== 'none') {
+                detectionStatus.style.display = 'none';
+            }
+            
+            createWalletButton(providerDetail);
+        });
+
+        // --- Dispatch Event untuk Meminta Penyedia Mengumumkan Diri ---
+        window.dispatchEvent(new Event('eip6963:requestProvider'));
+
+        // --- Fallback jika tidak ada wallet EIP-6963 yang terdeteksi ---
+        setTimeout(() => {
+            if (discoveredProviders.size === 0) {
+                 // Cek untuk window.ethereum sebagai fallback
+                if (typeof window.ethereum !== 'undefined') {
+                    detectionStatus.style.display = 'none';
+                    const metamaskProvider = {
+                        info: { name: 'Browser Wallet', icon: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjU2IiBoZWlnaHQ9IjI1NiIgdmlld0JveD0iMCAwIDI1NiAyNTYiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHBhdGggZD0iTTIyOS41IDc1LjYgMTQ0LjIgMjguMWE4IDggMCAwIDAtMTIuNCAwbC04NS4zIDQ3LjVhOCA4IDAgMCAwLTQuMSAxMS4xbDI2LjYgNjEuMWExNiAxNiAwIDAgMCAzMC4yIDBsMjYuNi02MS4xYTggOCAwIDAgMSAxMi40IDBsMjYuNiA2MS4xYTE2IDE2IDAgMCAwIDMwLjIgMGwyNi42LTYxLjFhOCA4IDAgMCAwLTQuMS0xMS4xWiIgZmlsbD0iI2Y2ODY1YiIvPjxwYXRoIGQ9Im0xNjAuNCAxMjAuMi0yNi42IDYxLjFhMTYgMTYgMCAwIDEtMzAuMiAwbC0yNi42LTYxLjFhOCA4IDAgMCAwLTEyLjQgMGwtMjYuNiA2MS4xYTE2IDE2IDAgMCAwIDguNyAyMS44bDgwLjEgNDEuMmE4IDggMCAwIDAgNy42IDBsODAuMS00MS4yYTE2IDE2IDAgMCAwIDguNy0yMS44bC0yNi42LTYxLjFhOCA4IDAgMCAwLTEyLjQgMFoiIGZpbGw9IiNjMDc0MmIiLz48cGF0aCBkPSJtMTg3IDE4MS4zLTI2LjYtNjEuMWE4IDggMCAwIDAtMTIuNCAwbC0xMy4zIDMwLjZhMTYgMTYgMCAwIDEgMTUuMSA5LjlsMjEuOCA3LjNhOCA4IDAgMCAxIDUuNCAxMy4zWiIgZmlsbD0iI2UyNzYyYiIvPjxwYXRoIGQ9Im02OC44IDE4MS4zIDI2LjgtNjEuMWE4IDggMCAwIDEgMTIuNCAwbDEzLjMgMzAuNmExNiAxNiAwIDAgMC0xNS4xIDkuOWwtMjEuOCA3LjNhOCA4IDAgMCAwLTUuNCAxMy4zWiIgZmlsbD0iI2UyNzYyYiIvPjxwYXRoIGQ9Im0xNTUgMTQxLjIgMTMuMy0zMC42YTggOCAwIDAgMC0xMi40IDBsLTEzLjMgMzAuNmExNiAxNiAwIDAgMCAwIDIwLjJsMTMuMyAzMC42YTggOCAwIDAgMCAxMi40IDBaIiBmaWxsPSIjZTU3MzJiIi8+PHBhdGggZD0ibTEwMSAxNDEuMi0xMy4zLTMwLjZhOCA4IDAgMCAwLTEyLjQgMGwtMTMuMyAzMC42YTE2IDE2IDAgMCAwIDAgMjAuMmwxMy4zIDMwLjZhOCA4IDAgMCAwIDEyLjQgMFoiIGZpbGw9IiNlNTczMmIiLz48L3N2Zz4=' }, // Generic icon
+                        provider: window.ethereum
+                    };
+                    createWalletButton(metamaskProvider);
+                } else {
+                    detectionStatus.textContent = 'No wallet detected. Please install a browser wallet.';
+                }
+            }
+        }, 1000); // Tunggu 1 detik
+
+        // --- Fungsi untuk Simulasi Pembuatan Token ---
+        function createToken() {
+            const tokenName = document.getElementById('tokenName').value;
+            const tokenTicker = document.getElementById('tokenTicker').value;
+            const totalSupply = document.getElementById('totalSupply').value;
+
+            if (!tokenName || !tokenTicker || !totalSupply) {
+                showNotification("Please fill in all token details.", 'error');
+                return;
+            }
+            
+            console.log("Token Data:", { name: tokenName, ticker: tokenTicker, supply: totalSupply });
+            showNotification(`Mock token creation for "${tokenName}" was successful!`);
+        }
+
+        // --- Event Listeners ---
+        createTokenBtn.addEventListener('click', createToken);
+
+    </script>
+</body>
+</html>
